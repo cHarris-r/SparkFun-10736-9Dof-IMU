@@ -80,12 +80,14 @@ void setup()
   delay(20);
   
   read_sensors();
-  
+  Reset_Sensor_Fusion();
 }
 
 // Main loop
 void loop()
 {
+  while( (millis() - timestamp) < 20 ) {}
+  
   // Update sensor readings
   read_sensors();
   f_UpdateTime();

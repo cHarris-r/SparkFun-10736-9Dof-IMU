@@ -68,13 +68,10 @@ void f_UpdateTime( void )
   float temp; 
   
   timestamp_old = timestamp;
-  timestamp     = micros();
+  timestamp     = millis();
   temp = timestamp - timestamp_old;
-
   
-  //while ( 1000000/(timestamp - timestamp_old) > (SRATE) ) { timestamp = micros(); }
-  
-  if( timestamp_old > 0 ) { G_Dt = (temp / 1000000.0) ; }
+  if( timestamp_old > 0 ) { G_Dt = (temp / 1000.0f) ; }
   else { G_Dt = 0; }
   
   mydt += (timestamp - timestamp_old);
@@ -87,14 +84,24 @@ void f_UpdateTime( void )
 */
 void Matrix_Update( void )
 {
+  /*
+  Gyro_Vector[0] = GYRO_X_SCALED( gyro[0] ); //gyro x roll
+  Gyro_Vector[1] = GYRO_Y_SCALED( gyro[1] ); //gyro y pitch
+  Gyro_Vector[2] = GYRO_Z_SCALED( gyro[2] ); //gyro z yaw
+  */
   Gyro_Vector[0] = GYRO_SCALED_RAD( gyro[0] ); //gyro x roll
   Gyro_Vector[1] = GYRO_SCALED_RAD( gyro[1] ); //gyro y pitch
   Gyro_Vector[2] = GYRO_SCALED_RAD( gyro[2] ); //gyro z yaw
   
+  /*
+  Accel_Vector[0]=accel[0];
+  Accel_Vector[1]=accel[1];
+  Accel_Vector[2]=accel[2];
+  */
   Accel_Vector[0] = ACCEL_X_SCALED( accel[0] );
   Accel_Vector[1] = ACCEL_Y_SCALED( accel[1] );
   Accel_Vector[2] = ACCEL_Z_SCALED( accel[2] );
-
+  
   Omega_Vector[0] = Gyro_Vector[0] + Omega_I[0] + Omega_P[0];
   Omega_Vector[1] = Gyro_Vector[1] + Omega_I[1] + Omega_P[1];
   Omega_Vector[2] = Gyro_Vector[2] + Omega_I[2] + Omega_P[2];

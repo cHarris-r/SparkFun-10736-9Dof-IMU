@@ -13,24 +13,6 @@
 #define HW__VERSION_CODE 10736 // SparkFun "9DOF Razor IMU" version "SEN-10736" (HMC5883L magnetometer)
 
 
-/* DCM parameters
-******************************************************************/
-// Gain for gyroscope (ITG-3200)
-#define GYRO_GAIN 0.06957 // Same gain on all axes
-#define GYRO_SCALED_RAD(x) (x * TO_RAD(GYRO_GAIN)) // Calculate the scaled gyro readings in radians per second
-
-// DCM gain
-#define Kp_ROLLPITCH 0.02f
-#define Ki_ROLLPITCH 0.00002f
-#define Kp_YAW 1.2f
-#define Ki_YAW 0.00002f
-
-// Stuff
-#define HW_LED_PIN 13  // Pin number of status LED
-#define GRAVITY 256.0f // "1G reference" used for DCM filter and accelerometer calibration
-#define TO_RAD(x) (x * 0.01745329252)  // *pi/180
-#define TO_DEG(x) (x * 57.2957795131)  // *180/pi
-
 
 
 /* Sensor I2C 
@@ -65,6 +47,10 @@
 ** Accelerometer
 ** "accel x,y,z (min/max) = X_MIN/X_MAX  Y_MIN/Y_MAX  Z_MIN/Z_MAX" 
 */
+
+#define TO_RAD(x) (x * 0.01745329252)  // *pi/180
+#define TO_DEG(x) (x * 57.2957795131)  // *180/pi
+
 #define ACCEL_X_MIN ((float) -250)
 #define ACCEL_X_MAX ((float) 250)
 #define ACCEL_Y_MIN ((float) -250)
@@ -78,9 +64,9 @@
 #define ACCEL_X_GAIN (GRAVITY / (ACCEL_X_MAX - ACCEL_X_OFFSET))
 #define ACCEL_Y_GAIN (GRAVITY / (ACCEL_Y_MAX - ACCEL_Y_OFFSET))
 #define ACCEL_Z_GAIN (GRAVITY / (ACCEL_Z_MAX - ACCEL_Z_OFFSET))
-#define ACCEL_X_SCALED(x) (x * ACCEL_X_GAIN) 
-#define ACCEL_Y_SCALED(x) (x * ACCEL_Y_GAIN) 
-#define ACCEL_Z_SCALED(x) (x * ACCEL_Z_GAIN) 
+#define ACCEL_X_SCALED(x) ( (x - ACCEL_X_OFFSET)*ACCEL_X_GAIN )
+#define ACCEL_Y_SCALED(x) ( (x - ACCEL_Y_OFFSET)*ACCEL_Y_GAIN )
+#define ACCEL_Z_SCALED(x) ( (x - ACCEL_Z_OFFSET)*ACCEL_Z_GAIN )
 
 // Magnetometer (standard calibration mode)
 // "magn x,y,z (min/max) = X_MIN/X_MAX  Y_MIN/Y_MAX  Z_MIN/Z_MAX"
@@ -98,12 +84,37 @@
 #define MAGN_Y_SCALE (100.0f / (MAGN_Y_MAX - MAGN_Y_OFFSET))
 #define MAGN_Z_SCALE (100.0f / (MAGN_Z_MAX - MAGN_Z_OFFSET))
 
-
 // Gyroscope
+
+// Gain for gyroscope (ITG-3200)
+#define GYRO_GAIN 0.06957 // Same gain on all axes
+#define GYRO_SCALED_RAD(x) (x * TO_RAD(GYRO_GAIN)) // Calculate the scaled gyro readings in radians per second
+
 // "gyro x,y,z (current/average) = .../OFFSET_X  .../OFFSET_Y  .../OFFSET_Z
 #define GYRO_AVERAGE_OFFSET_X ((float) 0.0)
 #define GYRO_AVERAGE_OFFSET_Y ((float) 0.0)
 #define GYRO_AVERAGE_OFFSET_Z ((float) 0.0)
+#define GYRO_X_SCALED(x) ( GYRO_SCALED_RAD(x - GYRO_AVERAGE_OFFSET_X) / 1000.0 )
+#define GYRO_Y_SCALED(x) ( GYRO_SCALED_RAD(x - GYRO_AVERAGE_OFFSET_Y) / 1000.0 )
+#define GYRO_Z_SCALED(x) ( GYRO_SCALED_RAD(x - GYRO_AVERAGE_OFFSET_Z) / 1000.0 )
+
+
+/* DCM parameters
+******************************************************************/
+
+
+// DCM gain
+#define Kp_ROLLPITCH 0.02f
+#define Ki_ROLLPITCH 0.00002f
+#define Kp_YAW 1.2f
+#define Ki_YAW 0.00002f
+
+// Stuff
+#define HW_LED_PIN 13  // Pin number of status LED
+#define GRAVITY 256.0f // "1G reference" used for DCM filter and accelerometer calibration
+
+
+
 
 /*******************************************************************
 ** Tyedefs *********************************************************

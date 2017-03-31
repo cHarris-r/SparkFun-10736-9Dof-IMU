@@ -65,6 +65,13 @@ void Accel_Init()
   delay(5);
 }
 
+void read_sensors() {
+  Read_Gyro(); // Read gyroscope
+  Read_Accel(); // Read accelerometer
+  Read_Magn(); // Read magnetometer
+}
+
+
 // Reads x, y and z accelerometer registers
 void Read_Accel()
 {
@@ -209,11 +216,6 @@ void Read_Gyro()
 }
 
 
-void read_sensors() {
-  Read_Gyro(); // Read gyroscope
-  Read_Accel(); // Read accelerometer
-  Read_Magn(); // Read magnetometer
-}
 
 /*************************************************
 ** f_BLinkLED 
