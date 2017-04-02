@@ -3,28 +3,6 @@
 #include <Wire.h>
 
 
-// Output mode definitions (do not change)
-#define OUTPUT__MODE_CALIBRATE_SENSORS 0 // Outputs sensor min/max values as text for manual calibration
-#define OUTPUT__MODE_ANGLES 1 // Outputs yaw/pitch/roll in degrees
-#define OUTPUT__MODE_SENSORS_CALIB 2 // Outputs calibrated sensor values for all 9 axes
-#define OUTPUT__MODE_SENSORS_RAW 3 // Outputs raw (uncalibrated) sensor values for all 9 axes
-#define OUTPUT__MODE_SENSORS_BOTH 4 // Outputs calibrated AND raw sensor values for all 9 axes
-// Output format definitions (do not change)
-#define OUTPUT__FORMAT_TEXT 0 // Outputs data as text
-#define OUTPUT__FORMAT_BINARY 1 // Outputs data as binary float
-
-// Select your startup output mode and format here!
-int output_mode = OUTPUT__MODE_ANGLES;
-int output_format = OUTPUT__FORMAT_TEXT;
-
-// Select if serial continuous streaming output is enabled per default on startup.
-#define OUTPUT__STARTUP_STREAM_ON true  // true or false
-
-// If set true, an error message will be output if we fail to read sensor data.
-// Message format: "!ERR: reading <sensor>", followed by "\r\n".
-boolean output_errors = false;  // true or false
-
-
 /*******************************************************************
 ** Globals *********************************************************
 ********************************************************************/
@@ -68,38 +46,43 @@ int count  = 0;
 
 
 
+/*******************************************************************
+** START ***********************************************************
+********************************************************************/
+
+/*************************************************
+** Setup Function 
+** This function contains the setup functions 
+** including the initialization of the hardware
+** and the initialization of the serial ports
+*/
 void setup()
 {
-  f_InitHardware();
-  if ( !initIMU() ) 
+	LOG_PORT.begin(9600);
+	
+  Init_Hardware();
+  if ( !Init_IMU() ) 
   {
     LOG_PORT.println("Error connecting to MPU-9250");
     while (1) ; // Loop forever if we fail to connect
   }
   LOG_PORT.println("> IMU Initialized");
   delay(20);
-  
-  read_sensors();
-  Reset_Sensor_Fusion();
 }
 
 // Main loop
 void loop()
-{
-  while( (millis() - timestamp) < 20 ) {}
-  
-  // Update sensor readings
-  read_sensors();
-  f_UpdateTime();
-  Matrix_Update();
-  Normalize();
-  Drift_Correction();
-  Euler_Angles();
+{ 
+  /* Update sensor readings */
+  Read_Sensors();
+	
+	/* Apply the DCM Filter */
+	DCM_Filter();
 
   /* Blink LED 
   ** TO DO: It would be nice to have a blink code
   **        to communicate during operation */
-  f_BlinkLED();
+  Blink_LED();
 }
 
 

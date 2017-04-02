@@ -1,7 +1,51 @@
+/*************************************************
+** FILE: DCM_Functions
+** This file contains the DCM filter functions
+** These functions take the accel/magn/gyro data
+** and (via the DCM filter) output filtered 
+** Euler angles.+
+**************************************************/
+
+
+
+/*************************************************
+** UpdateTime
+** Update the time state
+** Delta time (s) is used to determine the state
+** estimate in the filter.
+*/
+void Update_Time( void )
+{
+  float temp = TIME_RESOLUTION/TIME_SR;
+	while( (TIME_FUPDATE - timestamp) < (temp) ) {}
+  timestamp_old = timestamp;
+  timestamp     = TIME_FUPDATE;
+  
+  if( timestamp_old > 0 ) { G_Dt = ( (timestamp - timestamp_old) / TIME_RESOLUTION) ; }
+  else { G_Dt = 0; }
+}
+
+
+/*************************************************
+** DCM_Filter
+** Call the DCM filter functions
+** These functions apply the DCM filter and 
+** update the yaw/pitch/roll variables (the outputs)
+*/
+void DCM_Filter()
+{
+  Update_Time();
+  Matrix_Update();
+  Normalize();
+  Drift_Correction();
+  Euler_Angles();
+}
+
 
 /*************************************************
 ** Init_Rotation_Matrix
-** Init rotation matrix using euler angles 
+** Initialize the DCM rotation matrix using 
+** euler angles 
 */
 void Init_Rotation_Matrix(float m[3][3], float yaw, float pitch, float roll)
 {
@@ -12,8 +56,8 @@ void Init_Rotation_Matrix(float m[3][3], float yaw, float pitch, float roll)
   float c3 = cos(yaw);
   float s3 = sin(yaw);
 
-  // Euler angles, right-handed, intrinsic, XYZ convention
-  // (which means: rotate around body axes Z, Y', X'') 
+  /* Euler angles, right-handed, intrinsic, XYZ convention
+  ** (which means: rotate around body axes Z, Y', X'')  */
   m[0][0] = c2 * c3;
   m[0][1] = c3 * s1 * s2 - c1 * s3;
   m[0][2] = s1 * s3 + c1 * c3 * s2;
@@ -32,7 +76,8 @@ void Init_Rotation_Matrix(float m[3][3], float yaw, float pitch, float roll)
 ** Compass_Heading
 ** Get the current compas heading wrt north
 ** Uses estimated mag data
-** This function is not being used!
+** This function is not being used! It is 
+** only used when we are actually using the magnetometer
 */
 void Compass_Heading()
 {
@@ -60,56 +105,38 @@ void Compass_Heading()
 
 
 /*************************************************
-** f_UpdateTime
-** 
-*/
-void f_UpdateTime( void )
-{
-  float temp; 
-  
-  timestamp_old = timestamp;
-  timestamp     = millis();
-  temp = timestamp - timestamp_old;
-  
-  if( timestamp_old > 0 ) { G_Dt = (temp / 1000.0f) ; }
-  else { G_Dt = 0; }
-  
-  mydt += (timestamp - timestamp_old);
-}
-
-
-/*************************************************
 ** Matrix_Update
-**
+** We set the DCM matrix for this iteration.
+** We update the states assuming the IMU is 
+** traveling along the direction described by the
+** previous iterations DCM orientation.
+** Apply the feedback gains from the last iteration
+** in order to account for any drift.
 */
 void Matrix_Update( void )
 {
-  /*
-  Gyro_Vector[0] = GYRO_X_SCALED( gyro[0] ); //gyro x roll
-  Gyro_Vector[1] = GYRO_Y_SCALED( gyro[1] ); //gyro y pitch
-  Gyro_Vector[2] = GYRO_Z_SCALED( gyro[2] ); //gyro z yaw
-  */
+	/* Convert the Gyro values to radians
+	** Note: Values read from sensor are fixed point */
   Gyro_Vector[0] = GYRO_SCALED_RAD( gyro[0] ); //gyro x roll
   Gyro_Vector[1] = GYRO_SCALED_RAD( gyro[1] ); //gyro y pitch
   Gyro_Vector[2] = GYRO_SCALED_RAD( gyro[2] ); //gyro z yaw
   
-  /*
-  Accel_Vector[0]=accel[0];
-  Accel_Vector[1]=accel[1];
-  Accel_Vector[2]=accel[2];
-  */
+  /* Convert the acceleration values
+  ** Note: Values read from sensor are fixed point */
   Accel_Vector[0] = ACCEL_X_SCALED( accel[0] );
   Accel_Vector[1] = ACCEL_Y_SCALED( accel[1] );
   Accel_Vector[2] = ACCEL_Z_SCALED( accel[2] );
   
+  /* Apply prop and int gain to rotation */
   Omega_Vector[0] = Gyro_Vector[0] + Omega_I[0] + Omega_P[0];
   Omega_Vector[1] = Gyro_Vector[1] + Omega_I[1] + Omega_P[1];
   Omega_Vector[2] = Gyro_Vector[2] + Omega_I[2] + Omega_P[2];
 
+  /* Update the state matrix
+  ** We are essentially applying a rotation */
   DCM_Matrix[0][0] = G_Dt * (DCM_Matrix[0][1]*Omega_Vector[2] - DCM_Matrix[0][2]*Omega_Vector[1]) + DCM_Matrix[0][0];
   DCM_Matrix[0][1] = G_Dt * (DCM_Matrix[0][2]*Omega_Vector[0] - DCM_Matrix[0][0]*Omega_Vector[2]) + DCM_Matrix[0][1];
   DCM_Matrix[0][2] = G_Dt * (DCM_Matrix[0][0]*Omega_Vector[1] - DCM_Matrix[0][1]*Omega_Vector[0]) + DCM_Matrix[0][2];
-  
   DCM_Matrix[1][0] = G_Dt * (DCM_Matrix[1][1]*Omega_Vector[2] - DCM_Matrix[1][2]*Omega_Vector[1]) + DCM_Matrix[1][0];
   DCM_Matrix[1][1] = G_Dt * (DCM_Matrix[1][2]*Omega_Vector[0] - DCM_Matrix[1][0]*Omega_Vector[2]) + DCM_Matrix[1][1];
   DCM_Matrix[1][2] = G_Dt * (DCM_Matrix[1][0]*Omega_Vector[1] - DCM_Matrix[1][1]*Omega_Vector[0]) + DCM_Matrix[1][2];
@@ -118,7 +145,9 @@ void Matrix_Update( void )
 
 /*************************************************
 ** Normalize
-**
+** We must normalize the DCM matrix
+** After each update in order to keep 
+** each vector in the DCM orthogonal
 */
 void Normalize(void)
 {
@@ -126,16 +155,25 @@ void Normalize(void)
   float temporary[3][3];
   float renorm=0;
 
+  /* Determine vector overlap
+  ** Each vector should be orthogonal */
   error = -Vector_Dot_Product(&DCM_Matrix[0][0],&DCM_Matrix[1][0]) * 0.5; 
   
+  /* temp = V .* e */
   Vector_Scale(&temporary[0][0], &DCM_Matrix[1][0], error); 
   Vector_Scale(&temporary[1][0], &DCM_Matrix[0][0], error); 
   
+  /* temp = temp .* DCM[0][:] */
   Vector_Add(&temporary[0][0], &temporary[0][0], &DCM_Matrix[0][0]);
   Vector_Add(&temporary[1][0], &temporary[1][0], &DCM_Matrix[1][0]);
    
+  /* Force orthogonality */
   Vector_Cross_Product(&temporary[2][0],&temporary[0][0],&temporary[1][0]); 
   
+  /* Normalize each vector
+  ** DCM[i][:] = temp ./ ( 0.5*(3 - sum(temp.^2)) )
+  ** Note that the sum of the DCM vectors should have length of 1 */
+	
   renorm= .5 *(3 - Vector_Dot_Product(&temporary[0][0],&temporary[0][0]));
   Vector_Scale(&DCM_Matrix[0][0], &temporary[0][0], renorm);
   
@@ -149,7 +187,14 @@ void Normalize(void)
 
 /*************************************************
 ** Drift_Correction
-**
+** Drift correction basically looks at the difference in 
+** the orientation described by the DCM matrix and the
+** orientation described by the current acceleration vector.
+** Essentially, the acceleration is the input and the DCM
+** matrix is the current state. 
+** NOTE: We are applying a drift correction by adjusting the
+**       proportional and integral feedback. So, this will not
+**       have an effect until the next iteration!
 */
 void Drift_Correction(void)
 {
@@ -173,21 +218,37 @@ void Drift_Correction(void)
 	** Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0) */
   Accel_weight = constrain(1 - 2*abs(1 - Accel_magnitude),0,1); 
 
-  /* Adjust the ground of reference */
+  /* Adjust the ground of reference 
+  ** errorRP = accel x DCM[2][:] 
+  ** The error is essentially the amount that the DCM 
+  ** vector, the vector which describes our current orientation
+  ** in space, and the current acceleration vector differ. The accel
+  ** vector is naturally very noisy, but it is our input for each cycle 
+  ** and serves as our state estimate. Therefore, we scale the error 
+  ** by a integral and proportional gain in each cycle */
   Vector_Cross_Product(&errorRollPitch[0],&Accel_Vector[0],&DCM_Matrix[2][0]); 
+	
   Vector_Scale(&Omega_P[0],&errorRollPitch[0],Kp_ROLLPITCH*Accel_weight);
-  
   Vector_Scale(&Scaled_Omega_I[0],&errorRollPitch[0],Ki_ROLLPITCH*Accel_weight);
   Vector_Add(Omega_I,Omega_I,Scaled_Omega_I);     
 
+  /* Note:
+  ** Roll and pitch have been lumped here, to simplify the math
+  ** since the orientation is only described by a 3-dim point. 
+  ** We could split the roll/pitch gains (since the roll is 
+  ** described by DCM[2][1-2] and pitch is described by DCM[2,0])
+  ** however, we would have to be clever about how we apply the
+  ** acceleration vector */
+
   /* ***** YAW *************** */
-  /* We make the gyro YAW drift correction based on compass magnetic heading */
+  /* We make the gyro YAW drift correction based on compass magnetic heading 
+  ** The yaw is an estimate, and will drift towards some equilibrium as time 
+  ** progresses. However, presuming the drift is not constant towards any 
+  ** particular direction, this should be ok */
  
-  mag_heading_x = 1;
-  mag_heading_y = 0;
-  errorCourse=(DCM_Matrix[0][0]*mag_heading_y) - (DCM_Matrix[1][0]*mag_heading_x);  /* Calculating YAW error */
-  Vector_Scale(errorYaw,&DCM_Matrix[2][0],errorCourse); /* Applys the yaw correction to the XYZ rotation of the aircraft, depeding the position. */
+  Vector_Scale( errorYaw, &DCM_Matrix[2][0], DCM_Matrix[0][0] ); /* Applys the yaw correction to the XYZ rotation of the aircraft, depeding the position. */
   
+  /* Update the proportional and integral gains per yaw error */
   Vector_Scale(&Scaled_Omega_P[0],&errorYaw[0],Kp_YAW); /* 01proportional of YAW. */
   Vector_Add(Omega_P,Omega_P,Scaled_Omega_P); /* Adding  Proportional. */
   
@@ -198,7 +259,10 @@ void Drift_Correction(void)
 
 /*************************************************
 ** Euler_Angles
-**
+** Calculate the euler angles from the orintation 
+** described by the DCM matrix.
+** DCM[2][:] is essentially a vector describing the
+** orientation of the IMU in space.\
 */
 void Euler_Angles(void)
 {
@@ -208,13 +272,12 @@ void Euler_Angles(void)
 }
 
 
-
-
-
 /*************************************************
 ** Reset_Sensor_Fusion
-** Read every sensor and record a time stamp
-** Init DCM with unfiltered orientation
+** Read every sensor and record a time stamp.
+** Init DCM with unfiltered orientation 
+** I.e. set inital roll/pitch from inital guess
+*       and initialize the DCM arrays.
 */
 void Reset_Sensor_Fusion() {
   float temp1[3];
@@ -245,7 +308,10 @@ void Reset_Sensor_Fusion() {
 
 /*************************************************
 ** Set_Sensor_Fusion
-**
+** Similar to Reset_Sensor_Fusion, except we do not 
+** re-initialize the DCM arrays. This is used to 
+** reset the roll/pitch values without touching the
+** DCM filter.
 */
 void Set_Sensor_Fusion()
 {
@@ -269,26 +335,6 @@ void Set_Sensor_Fusion()
 
   /* GET YAW */
   yaw = 0;
-}
-
-
-
-// Apply calibration to raw sensor readings
-void compensate_sensor_errors() {
-    // Compensate accelerometer error
-    accel[0] = (accel[0] - ACCEL_X_OFFSET) * ACCEL_X_GAIN;
-    accel[1] = (accel[1] - ACCEL_Y_OFFSET) * ACCEL_Y_GAIN;
-    accel[2] = (accel[2] - ACCEL_Z_OFFSET) * ACCEL_Z_GAIN;
-
-    // Compensate magnetometer error
-    mag[0] = (mag[0] - MAGN_X_OFFSET) * MAGN_X_SCALE;
-    mag[1] = (mag[1] - MAGN_Y_OFFSET) * MAGN_Y_SCALE;
-    mag[2] = (mag[2] - MAGN_Z_OFFSET) * MAGN_Z_SCALE;
-
-    // Compensate gyroscope error
-    gyro[0] -= GYRO_AVERAGE_OFFSET_X;
-    gyro[1] -= GYRO_AVERAGE_OFFSET_Y;
-    gyro[2] -= GYRO_AVERAGE_OFFSET_Z;
 }
 
 
