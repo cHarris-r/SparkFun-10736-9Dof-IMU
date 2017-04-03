@@ -16,13 +16,16 @@
 */
 void Update_Time( void )
 {
-  float temp = TIME_RESOLUTION/TIME_SR;
+  float temp = (float) (TIME_RESOLUTION / (TIME_SR+1.0) );
+
+  /* Ensure sample rate */
 	while( (TIME_FUPDATE - timestamp) < (temp) ) {}
+
+  /* Update delta T */
   timestamp_old = timestamp;
-  timestamp     = TIME_FUPDATE;
-  
-  if( timestamp_old > 0 ) { G_Dt = ( (timestamp - timestamp_old) / TIME_RESOLUTION) ; }
-  else { G_Dt = 0; }
+  timestamp     = TIME_FUPDATE; 
+  if( timestamp_old > 0 ) { G_Dt = (float) ( (timestamp - timestamp_old) / TIME_RESOLUTION ) ; }
+  else { G_Dt = 0.0f; }
 }
 
 
@@ -266,8 +269,58 @@ void Drift_Correction(void)
 */
 void Euler_Angles(void)
 {
-  pitch = -f_asin( DCM_Matrix[2][0] ); // A faster asin
-  roll  =  f_atan2( DCM_Matrix[2][1], DCM_Matrix[2][2] ); // A faster atan2
+  /* Pitch Conventions (set in config):
+  ** Range: -90:90
+  ** With PITCH_ROT_CONV==1 : 
+  ** PITCH_O:1 - Pitch orientation #1. Angle x-axis w/ Horizontal Plane  +Rot:Aft-Down    0:Nadir0/Zenith down. +90:Aft down   -90:Fore down
+  ** PITCH_O:2 - Pitch orientation #2. Angle y-axis w/ Horizontal Plane  +Rot:Port-Down   0:Fore/Aft down       +90:Port down  -90:Starboard down
+  ** PITCH_O:3 - Pitch orientation #3. Angle z-axis w/ Horizontal Plane  +Rot:Nadir-Down  0:Fore/Aft down       +90:Nadir down -90:Zenith down */
+  switch ( PITCH_O )
+  {
+    case 1 :
+      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][0] );
+      break;
+    case 2 : 
+      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][1] );
+      break;
+    case 3 :
+      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][2] );
+      break;
+  }
+  
+  /* Define roll orientation convention (set in config):
+  ** We should only be using 3,4,5 orientations, but they are all available for hacking.
+  ** Range: -180:180
+  ** With ROLL_ROT_CONV==1  ROLL_ZREF==1
+  ** ROLL_O:1 - Roll orientation #1. Rotation around z-axis (Nadir-Zenith) +Rot:Aft-Port    0:Port down     +-180:stbd down 
+  ** ROLL_O:2 - Roll orientation #2. Rotation around y-axis (Port-Stbd)    +Rot:Aft-Nadir   0:Nadir down    +-180:Zenith down 
+  ** ROLL_O:3 - Roll orientation #3. Rotation around x-axis (Fore-Aft)     +Rot:Port-Nadir  0:Nadir down    +-180:Zenith down  
+  ** ROLL_O:4 - Roll orientation #4. Rotation around z-axis (Nadir-Zenith) +Rot:Aft-Port    0:Aft down      +-180:Fore down  
+  ** ROLL_O:5 - Roll orientation #5. Rotation around y-axis (Port-Stbd)    +Rot:Aft-Nadir   0:Aft down      +-180:Fore down  
+  ** ROLL_O:6 - Roll orientation #6. Rotation around x-axis (Fore-Aft)     +Rot:Port-Nadir  0:Port down     +-180:Stbd down  
+  ** WARNING: ROLL should be determined from pitch orientation, not set manually */
+  switch ( ROLL_O )
+  {
+    case 1 :
+      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][0], -ROLL_ZREF*DCM_Matrix[2][1] );
+      break;
+    case 2 :
+      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][0], -ROLL_ZREF*DCM_Matrix[2][2] ); 
+      break;
+    case 3 :
+      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][1], -ROLL_ZREF*DCM_Matrix[2][2] );
+      break;
+    case 4 :
+      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][1], -ROLL_ZREF*DCM_Matrix[2][0] );
+      break;
+    case 5 :
+      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][2], -ROLL_ZREF*DCM_Matrix[2][0] );
+      break;
+    case 6 :
+      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][2], -ROLL_ZREF*DCM_Matrix[2][1] );
+      break;
+  }
+  
   yaw   =  f_atan2( DCM_Matrix[1][0], DCM_Matrix[0][0] ); // A faster atan2
 }
 

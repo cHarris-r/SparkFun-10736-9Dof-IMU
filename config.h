@@ -1,27 +1,108 @@
 
 /******************************************************************
-** User defined
-*******************************************************************/
-
-/* General Settings
+** User defined 
+** General Settings
 ** Here we define the general settings for the system
 ** These can be changed to suit the users needs
 ******************************************************************/
 
-/* Serial Port Config */
-#define DEBUG 1
-#define LOG_PORT if(DEBUG)Serial
-//#define LOG_PORT if(DEBUG)SERIAL_PORT_USBVIRTUAL
-#define LOG_PORT_BAUD 115200
 
-#define COMM_PORT Serial
+/* Communication Parameters
+*******************************************************************/
+/* Serial Port Configuration */
+#define DEBUG 1 
+#define LOG_PORT_BAUD 115200
 #define COMM_PORT_BAUD 9600
 
-#define UART_BLINK_RATE 1000
+/* The LED can be used for external debugging */
+#define UART_BLINK_RATE 100
 
+
+
+/* DCM parameters
+*******************************************************************/
+
+/* DCM gain */
+#define Kp_ROLLPITCH 0.02f
+#define Ki_ROLLPITCH 0.00002f
+#define Kp_YAW 1.2f
+#define Ki_YAW 0.00002f
+
+/* "1G reference" used for DCM filter and accelerometer calibration */
+#define GRAVITY 256.0f 
+
+
+/* Define pitch orientation convention
+** Range: -90:90
+** With PITCH_ROT_CONV==1 :
+** PITCH_O:1 - Pitch orientation #1. Angle x-axis w/ Horizontal Plane  +Rot:Aft-Down    0:Nadir0/Zenith down. +90:Aft down   -90:Fore down
+** PITCH_O:2 - Pitch orientation #2. Angle y-axis w/ Horizontal Plane  +Rot:Port-Down   0:Fore/Aft down       +90:Port down  -90:Starboard down
+** PITCH_O:3 - Pitch orientation #3. Angle z-axis w/ Horizontal Plane  +Rot:Nadir-Down  0:Fore/Aft down       +90:Nadir down -90:Zenith down */
+#define PITCH_O  1
+
+/* Pitch rotation convention
+** This sets the sign of rotation for pitch
+**   1 :+Towards +axis
+**  -1 :+Towards -axis */
+#define PITCH_ROT_CONV 1
+
+/* NOTE:
+** Since Pitch is -90:+90, there is no "PITCH_ZREF"
+** as this would have the exact role as flipping 
+** "PITCH_ROT_CONV" */
+
+/* Roll rotation convention
+** This sets the sign of rotation for roll
+**   1 :+Towards +axis
+**  -1 :+Towards -axis */
+#define ROLL_ROT_CONV 1
+
+/* Roll rotation reference direction
+** This will reverse the direction of the "0" reference for roll
+**   1 :"0" is in direction of +axis
+**  -1 :"0" is in direction of -axis */
+#define ROLL_ZREF 1
+
+
+
+
+
+/******************************************************************
+** User dependant
+** DON'T TOUCH! 
+** These are created from user variables
+*******************************************************************/
+
+/* Define roll orientation convention
+** We should only be using 3,4,5 orientations, but they are all available for hacking.
+** Range: -180:180
+** With ROLL_ROT_CONV==1  ROLL_ZREF==1
+** ROLL_O:1 - Roll orientation #1. Rotation around z-axis (Nadir-Zenith) +Rot:Aft-Port    0:Port down     +-180:stbd down 
+** ROLL_O:2 - Roll orientation #2. Rotation around y-axis (Port-Stbd)    +Rot:Aft-Nadir   0:Nadir down    +-180:Zenith down 
+** ROLL_O:3 - Roll orientation #3. Rotation around x-axis (Fore-Aft)     +Rot:Port-Nadir  0:Nadir down    +-180:Zenith down  
+** ROLL_O:4 - Roll orientation #4. Rotation around z-axis (Nadir-Zenith) +Rot:Aft-Port    0:Aft down      +-180:Fore down  
+** ROLL_O:5 - Roll orientation #5. Rotation around y-axis (Port-Stbd)    +Rot:Aft-Nadir   0:Aft down      +-180:Fore down  
+** ROLL_O:6 - Roll orientation #6. Rotation around x-axis (Fore-Aft)     +Rot:Port-Nadir  0:Port down     +-180:Stbd down  
+** WARNING: ROLL should be determined from pitch orientation, not set manually */
+#if    PITCH_O==1  /* Rotation around y-axis  +Rot:Aft-Down    0:Nadir0/Zenith down. +90:Aft down -90:Fore down */
+  #define ROLL_O 3 
+#elif  PITCH_O==2  /* Rotation around z-axis  +Rot:Port-Down   0:Fore/Aft down       +90:Port down -90:Starboard down */
+  /* This is offset 90, need to find another option */
+  #define ROLL_O 5
+#elif PITCH_O==3   /* Rotation around y-axis  +Rot:Nadir-Down  0:Fore/Aft down       +90:Nadir down -90:Zenith down */
+  /* This is offset 90, need to find another option */
+  #define ROLL_O 4
+#endif
+
+/* Set which sensors to read */
 #define ACCEL_ON 1
 #define GYRO_ON  1
 #define MAGN_ON  0 /* We removed support for the mag in the DCM! */
+
+
+
+
+
 
 
 /******************************************************************
@@ -29,27 +110,45 @@
 ** SparkFun "9DOF Razor IMU" version "SEN-10736" (HMC5883L magnetometer)
 *******************************************************************/
 
-#define TIME_SR         200.0f    /* NOTE: depends on sensor values! */
-#define TIME_RESOLUTION 1000.0f
-#define TIME_FUPDATE    millis()
+/* COMM Ports 
+*******************************************************************/
+#define LOG_PORT if(DEBUG)Serial
+//#define LOG_PORT if(DEBUG)SERIAL_PORT_USBVIRTUAL
+#define COMM_PORT Serial
+
+
+/* Sampling resolution
+*******************************************************************/
+/* Set the system sampling rate */
+#define TIME_SR         200.0f    /* Warning: depends on sensor values! */
+
+/* Resolution of system time
+** Used to set delta T - see Update_Time */
+//#define TIME_RESOLUTION 1000.0f
+#define TIME_RESOLUTION 1000000.0f
+
+/* TIME_RESOLUTION should match TIME_FUPDATE !! */
+//#define TIME_FUPDATE    millis()
+#define TIME_FUPDATE    micros()
 
 
 /* Board LED 
 *******************************************************************/
 #define HW_LED_PIN 13 
 
-/* Accelerometer I2C addresses 
+
+/* Accelerometer I2C addresses (Regeister Map)
 ******************************************************************/
-#define ACCEL_ADDRESS ((int16_t) 0x53) // 0x53 = 0xA6 / 2
+#define ACCEL_ADDRESS ((int16_t) 0x53) /* 0x53 = 0xA6 / 2 (this is local) */
 #define ACCEL_RATE     0x2C            /* Name:Data rate and power mode control BW_RATE  - Access:R/W */
 #define ACCEL_POWER    0x2D            /* Name:Power-Saving features control POWER_CTL   - Access:R/W */
 #define ACCEL_FORMAT   0x31            /* Name:Data format control                       - Access:R/W */
 #define ACCEL_DATA     0x32            /* Name:Start of data registers (6 bytes)         - Access:R   */
 
 
-/* Magnometer I2C addresses 
+/* Magnometer I2C addresses (Regeister Map)
 ******************************************************************/
-#define MAGN_ADDRESS  ((int16_t) 0x1E) /* 0x1E = 0x3C / 2 */
+#define MAGN_ADDRESS  ((int16_t) 0x1E) /* 0x1E = 0x3C / 2 (this is local) */
 #define MAGN_CONFIG_A  0x00            /* Name:Configuration Register A 		- Access:Read/Write */
 #define MAGN_CONFIG_B  0x01            /* Name:Configuration Register B 		- Access:Read/Write */
 #define MAGN_MODE      0x02            /* Name:Mode Register 								- Access:Read/Write */
@@ -66,9 +165,9 @@
 
 
 
-/* Gyroscope addresses I2C addresses 
+/* Gyroscope addresses I2C addresses (Regeister Map)
 ******************************************************************/
-#define GYRO_ADDRESS  ((int16_t) 0x68) /* 0x68 = 0xD0 / 2 */
+#define GYRO_ADDRESS  ((int16_t) 0x68) /* 0x68 = 0xD0 / 2 (this is local) */
 #define GYRO_ID        0x00            /* Name:verify identity WHO_AM_I						- Access:R/W */
 #define GYRO_RATE      0x15            /* Name:Sample rate divider            		- Access:R/W */
 #define GYRO_DLPF      0x16            /* Name:Configures several parameters 	 		- Access:R/W */
@@ -85,13 +184,13 @@
 
 
 
+
+
+
+
 /******************************************************************
 ** Sensor Calibration
 *******************************************************************
-** Put MIN/MAX and OFFSET readings here to adjust for offset
-** Accelerometer
-*/
-
 
 /* Calibration Macros
 ******************************************************************/
@@ -144,22 +243,6 @@
 #define GYRO_SCALED_RAD(x) (x * TO_RAD(GYRO_GAIN)) 
 
 
-
-
-
-/******************************************************************
-** DCM parameters
-*******************************************************************/
-
-/* DCM gain
-******************************************************************/
-#define Kp_ROLLPITCH 0.02f
-#define Ki_ROLLPITCH 0.00002f
-#define Kp_YAW 1.2f
-#define Ki_YAW 0.00002f
-
-/* "1G reference" used for DCM filter and accelerometer calibration */
-#define GRAVITY 256.0f 
 
 
 

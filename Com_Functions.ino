@@ -1,3 +1,12 @@
+/*************************************************
+** FILE: Com_Functions
+** This file contains the helper functions which 
+** allow us to communicate with either the user
+** (via LOG_PORT) or another processor (via COM_PORT)
+** It handles data packing, command interpretation, 
+** and other such protocol-level operations.
+**************************************************/
+
 
 
 /*************************************************
@@ -17,12 +26,12 @@ void Debug_LogOut(void)
   imuLog += "DT: " + String( G_Dt,5 ) + ", ";
 	imuLog += "SR: " + String( (1/G_Dt),5 ) + ", "; // Add delta time to log string
 
-	imuLog += "Roll:" + String( TO_DEG(roll),5 ) + ", ";
-	imuLog += "Pitch:" + String( TO_DEG(pitch),5 ) + ", ";
-	imuLog += "Yaw:" + String( TO_DEG(yaw),5 ) + ", ";
-
-  imuLog += "accel:" + String( accel[0],5 ) + ", " + String( accel[1],5 ) + ", " + String( accel[2],5 ) + ", ";
-  imuLog += "gyro:" + String( gyro[0],5 ) + ", " + String( gyro[1],5 ) + ", " + String( gyro[2],5 ) + ", ";
+  imuLog += "Roll 1:" + String( TO_DEG( roll ),5 ) + ", ";
+  imuLog += "Pitch:" + String( TO_DEG(pitch),5 ) + ", ";
+	//imuLog += "Yaw:" + String( TO_DEG(yaw),5 ) + ", ";
+  
+  //imuLog += "accel:" + String( accel[0],5 ) + ", " + String( accel[1],5 ) + ", " + String( accel[2],5 ) + ", ";
+  //imuLog += "gyro:" + String( gyro[0],5 ) + ", " + String( gyro[1],5 ) + ", " + String( gyro[2],5 ) + ", ";
  
 	imuLog += "\r\n"; // Add a new line
 	LOG_PORT.print(imuLog); // Print log line to serial port

@@ -10,6 +10,25 @@
 
 
 /*************************************************
+** Init_Hardware 
+** This function sets the LED GPIO Pin and 
+** the com port baud rates.
+*/
+void Init_Hardware( void )
+{
+  /* Initiate the LOG_PORT */
+  LOG_PORT.begin(LOG_PORT_BAUD);
+  
+  /* Some Log Output (usb) */
+  LOG_PORT.println("> Initializing Hardware");
+    
+  /* Set up LED pin (active-high, default to off) */
+  pinMode(HW_LED_PIN, OUTPUT);
+  digitalWrite(HW_LED_PIN, LOW);
+}
+
+
+/*************************************************
 ** BLinkLED 
 ** This function is used to communicate to the user
 ** that the board is indeed doing things

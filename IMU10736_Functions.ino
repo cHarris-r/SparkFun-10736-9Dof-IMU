@@ -1,3 +1,4 @@
+
 /*************************************************
 ** FILE: IMU10736_Functions
 ** This file contains some MPU 9250 (HW specific)
@@ -5,24 +6,26 @@
 ** reading the sensor registeres
 **************************************************/
 
-
-
 /*************************************************
-** Init_Hardware 
-** This function sets the LED GPIO Pin,
-*/
-void Init_Hardware( void )
-{
-	/* Initiate the LOG_PORT */
-  LOG_PORT.begin(LOG_PORT_BAUD);
-  
-  /* Some Log Output (usb) */
-  LOG_PORT.println("> Initializing Hardware");
-    
-  /* Set up LED pin (active-high, default to off) */
-  pinMode(HW_LED_PIN, OUTPUT);
-  digitalWrite(HW_LED_PIN, LOW);
-}
+** NOTES on orientation for the 10736 IMU
+**   Terms: 
+**     Fore:       (Front) Edge oposite of the power port
+**     Aft:        (Rear) Edge of the power port
+**     Starboard:  (Right) Edge with reset switch
+**     Port:       (Left) Edge oposite of reset switch
+**     Zenith:     (Up) Clean face of board 
+**     Nadir:      (Down) Populated face of board
+**   Contrary to the silk, the axis are positioned as follows:
+**     +x is Fore,       -x is Aft
+**     +y is Starboard,  -y is Port
+**     +z is Zenith,     -z is Nadir
+**   This means, placing the board on a flat surface with the 
+**   unpopulated side (Zenith) down will result in an acceleration 
+**   of about -256 (1xg) for accel[2] (z) since the acceleration  
+**   from gravity with be acting along -z.
+**************************************************/
+
+
 
 /*************************************************
 ** Read_Sensors 

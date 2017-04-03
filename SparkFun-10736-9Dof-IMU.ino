@@ -58,9 +58,10 @@ int count  = 0;
 */
 void setup()
 {
-	LOG_PORT.begin(9600);
-	
+  /* Initialize the hardware */
   Init_Hardware();
+
+  /* Initialize the IMU */
   if ( !Init_IMU() ) 
   {
     LOG_PORT.println("Error connecting to MPU-9250");
@@ -68,6 +69,10 @@ void setup()
   }
   LOG_PORT.println("> IMU Initialized");
   delay(20);
+  
+  /* Set the initial roll/pitch/yaw from 
+  ** initial accel/gyro */
+  Reset_Sensor_Fusion(); 
 }
 
 // Main loop
