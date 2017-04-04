@@ -25,6 +25,14 @@ void Init_Hardware( void )
   /* Set up LED pin (active-high, default to off) */
   pinMode(HW_LED_PIN, OUTPUT);
   digitalWrite(HW_LED_PIN, LOW);
+
+  g_control_state.timestamp      = 0;
+  g_control_state.timestamp_old  = 0;
+  g_control_state.G_Dt           = 0.0;
+  
+  g_control_state.g_BaudLock       = true;
+  g_control_state.g_LedState       = false;
+  g_control_state.g_LastBlinkTime  = 0;
 }
 
 
@@ -37,7 +45,7 @@ void Init_Hardware( void )
 void Blink_LED( void )
 {
   /* We blink every UART_BLINK_RATE millisecods */
-  if ( millis() > (g_LastBlinkTime + UART_BLINK_RATE) )
+  if ( millis() > (g_control_state.g_LastBlinkTime + UART_BLINK_RATE) )
   {
 		/* Log the current states to the debug port */
     Debug_LogOut();
@@ -49,9 +57,9 @@ void Blink_LED( void )
 		
 		/* Toggle LED */
     LOG_PORT.println("> Blink ...");
-    digitalWrite(HW_LED_PIN, g_LedState);
-    g_LedState = !g_LedState;
-    g_LastBlinkTime = millis();
+    digitalWrite(HW_LED_PIN, g_control_state.g_LedState);
+    g_control_state.g_LedState = !g_control_state.g_LedState;
+    g_control_state.g_LastBlinkTime = millis();
   }
 } /* End f_BLinkLED */
 

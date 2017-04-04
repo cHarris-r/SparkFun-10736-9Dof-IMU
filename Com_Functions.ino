@@ -22,19 +22,19 @@ void Debug_LogOut(void)
 	
 	String imuLog = ""; // Create a fresh line to log
 	
-  imuLog += "Time: " + String(timestamp) + ", "; // Add time to log string
-  imuLog += "DT: " + String( G_Dt,5 ) + ", ";
-	imuLog += "SR: " + String( (1/G_Dt),5 ) + ", "; // Add delta time to log string
+  imuLog += "Time: " + String( g_control_state.timestamp ) + ", "; // Add time to log string
+  imuLog += "DT: " + String( g_control_state.G_Dt,5 ) + ", ";
+	imuLog += "SR: " + String( (1/g_control_state.G_Dt),5 ) + ", "; // Add delta time to log string
 
-  imuLog += "Roll 1:" + String( TO_DEG( roll ),5 ) + ", ";
-  imuLog += "Pitch:" + String( TO_DEG(pitch),5 ) + ", ";
-	//imuLog += "Yaw:" + String( TO_DEG(yaw),5 ) + ", ";
+  imuLog += "Roll 1:" + String( TO_DEG( g_sensor_state.roll ),5 ) + ", ";
+  imuLog += "Pitch:" + String( TO_DEG( g_sensor_state.pitch ),5 ) + ", ";
+	//imuLog += "Yaw:" + String( TO_DEG( g_sensor_state.yaw ),5 ) + ", ";
   
-  //imuLog += "accel:" + String( accel[0],5 ) + ", " + String( accel[1],5 ) + ", " + String( accel[2],5 ) + ", ";
-  //imuLog += "gyro:" + String( gyro[0],5 ) + ", " + String( gyro[1],5 ) + ", " + String( gyro[2],5 ) + ", ";
+  //imuLog += "accel:" + String( g_sensor_state.accel[0],5 ) + ", " + String( g_sensor_state.accel[1],5 ) + ", " + String( g_sensor_state.accel[2],5 ) + ", ";
+  //imuLog += "gyro:" + String( g_sensor_state.gyro[0],5 ) + ", " + String( g_sensor_state.gyro[1],5 ) + ", " + String( g_sensor_state.gyro[2],5 ) + ", ";
  
 	imuLog += "\r\n"; // Add a new line
-	LOG_PORT.print(imuLog); // Print log line to serial port
+	LOG_PORT.print( imuLog ); // Print log line to serial port
 }
 
 
@@ -132,9 +132,9 @@ void f_SendData( int nBytesIn )
 				Response.PacketType     = 1;
 				Response.Buffer_nBytes  = sizeof(uint8_t)*2*3;
         Response.Packet_nBytes  = sizeof(uint16_t)*2 + sizeof(uint8_t)*(1 + Response.Buffer_nBytes);
-        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*0], TO_DEG(roll) );
-        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*1], TO_DEG(pitch) );
-        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*2], TO_DEG(yaw) );
+        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*0], TO_DEG(g_sensor_state.roll) );
+        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*1], TO_DEG(g_sensor_state.pitch) );
+        f_WriteFToPacket_u16( &Response.Buffer[sizeof(uint16_t)*2], TO_DEG(g_sensor_state.yaw) );
         Response.CheckSum       = f_CheckSum( &Response.Buffer[0], Response.Buffer_nBytes ); 
         f_SendPacket( Response );
 				break;
@@ -151,9 +151,9 @@ void f_SendData( int nBytesIn )
         Response.PacketType     = 2;
         Response.Buffer_nBytes  = sizeof(uint8_t)*4*3;
         Response.Packet_nBytes  = sizeof(uint16_t)*2 + sizeof(uint8_t)*(1 + Response.Buffer_nBytes);
-        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*0], TO_DEG(roll) );
-        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*1], TO_DEG(pitch) );
-        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*2], TO_DEG(yaw) );
+        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*0], TO_DEG(g_sensor_state.roll) );
+        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*1], TO_DEG(g_sensor_state.pitch) );
+        f_WriteFToPacket_s32( &Response.Buffer[sizeof(uint32_t)*2], TO_DEG(g_sensor_state.yaw) );
         Response.CheckSum       = f_CheckSum( &Response.Buffer[0], Response.Buffer_nBytes ); 
         f_SendPacket( Response );
         break;
@@ -301,7 +301,7 @@ void f_Handshake( void )
 	
 	/* We continue to attempt a handshake
 	** until there is a lock */
-	while( g_BaudLock==false )
+	while( g_control_state.g_BaudLock==false )
 	{
 		/* Some Log Output (usb) */
 		LOG_PORT.println("> Beginning Handshake");
@@ -358,7 +358,7 @@ void f_Handshake( void )
       LOG_PORT.println("> Baud Lock Successful");
 		
 			/* Toggle Boud lock */
-			g_BaudLock = true; 
+			g_control_state.g_BaudLock = true; 
 		
 			/* Reply with confimation char to 
 			** complete the handshake with the master */

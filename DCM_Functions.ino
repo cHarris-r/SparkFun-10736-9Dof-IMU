@@ -19,29 +19,13 @@ void Update_Time( void )
   float temp = (float) (TIME_RESOLUTION / (TIME_SR+1.0) );
 
   /* Ensure sample rate */
-	while( (TIME_FUPDATE - timestamp) < (temp) ) {}
+	//while( (TIME_FUPDATE - g_control_state.timestamp) < (temp) ) {}
 
   /* Update delta T */
-  timestamp_old = timestamp;
-  timestamp     = TIME_FUPDATE; 
-  if( timestamp_old > 0 ) { G_Dt = (float) ( (timestamp - timestamp_old) / TIME_RESOLUTION ) ; }
-  else { G_Dt = 0.0f; }
-}
-
-
-/*************************************************
-** DCM_Filter
-** Call the DCM filter functions
-** These functions apply the DCM filter and 
-** update the yaw/pitch/roll variables (the outputs)
-*/
-void DCM_Filter()
-{
-  Update_Time();
-  Matrix_Update();
-  Normalize();
-  Drift_Correction();
-  Euler_Angles();
+  g_control_state.timestamp_old = g_control_state.timestamp;
+  g_control_state.timestamp     = TIME_FUPDATE; 
+  if( g_control_state.timestamp_old > 0 ) { g_control_state.G_Dt = (float) ( (g_control_state.timestamp - g_control_state.timestamp_old) / TIME_RESOLUTION ) ; }
+  else { g_control_state.G_Dt = 0.0f; }
 }
 
 
@@ -75,148 +59,119 @@ void Init_Rotation_Matrix(float m[3][3], float yaw, float pitch, float roll)
 }
 
 
-/*************************************************
-** Compass_Heading
-** Get the current compas heading wrt north
-** Uses estimated mag data
-** This function is not being used! It is 
-** only used when we are actually using the magnetometer
-*/
-void Compass_Heading()
+/******************************************************************
+** FUNCTION: DCM_Filter
+** There are 4 parts to the DCM filter
+**   1. Matrix_Update    - Update the DCM
+**   2. Normalize        - Normalize the DCM
+**   3. Drift_Correction - Correct for drift in orientation 
+**   4. Get_Euler_Angles - Extract Euler angles from DCM */
+void DCM_Filter( void )
 {
-  float mag_x;
-  float mag_y;
-  float cos_roll;
-  float sin_roll;
-  float cos_pitch;
-  float sin_pitch;
+  float error = 0;
+  float renorm = 0;
+	
+  float TempM[3][3];
+	
+	float Accel_Vector[3];
+  float Accel_magnitude;
+  float Accel_weight;
   
-  cos_roll  = cos(roll);
-  sin_roll  = sin(roll);
-  cos_pitch = cos(pitch);
-  sin_pitch = sin(pitch);
-  
-	/* Tilt compensated magnetic field X */
-  mag_x = mag[0] * cos_pitch + mag[1] * sin_roll * sin_pitch + mag[2] * cos_roll * sin_pitch;
-  
-	/* Tilt compensated magnetic field Y */
-  mag_y = mag[1] * cos_roll - mag[2] * sin_roll;
-  
-	/* Magnetic Heading */
-  MAG_Heading = f_atan2(-mag_y, mag_x);
-}
+	float Omega_Vector[3];
+	float ErrorGain[3];
+  float errorRollPitch[3];
+  float errorYaw[3];
 
+	float *DCM_Matrix   = &g_dcm_state.DCM_Matrix[0][0];
 
-/*************************************************
-** Matrix_Update
-** We set the DCM matrix for this iteration.
-** We update the states assuming the IMU is 
-** traveling along the direction described by the
-** previous iterations DCM orientation.
-** Apply the feedback gains from the last iteration
-** in order to account for any drift.
-*/
-void Matrix_Update( void )
-{
-	/* Convert the Gyro values to radians
-	** Note: Values read from sensor are fixed point */
-  Gyro_Vector[0] = GYRO_SCALED_RAD( gyro[0] ); //gyro x roll
-  Gyro_Vector[1] = GYRO_SCALED_RAD( gyro[1] ); //gyro y pitch
-  Gyro_Vector[2] = GYRO_SCALED_RAD( gyro[2] ); //gyro z yaw
-  
+  /******************************************************************
+  ** DCM 1. Update the Direction Cosine Matrix
+  ** We set the DCM matrix for this iteration.
+  ** We update the states assuming the IMU is 
+  ** traveling along the direction described by the
+  ** previous iterations DCM orientation.
+  ** Apply the feedback gains from the last iteration
+  ** in order to account for any drift.
+  ******************************************************************/
+	
   /* Convert the acceleration values
   ** Note: Values read from sensor are fixed point */
-  Accel_Vector[0] = ACCEL_X_SCALED( accel[0] );
-  Accel_Vector[1] = ACCEL_Y_SCALED( accel[1] );
-  Accel_Vector[2] = ACCEL_Z_SCALED( accel[2] );
+  Accel_Vector[0] = ACCEL_X_SCALED( g_sensor_state.accel[0] );
+  Accel_Vector[1] = ACCEL_Y_SCALED( g_sensor_state.accel[1] );
+  Accel_Vector[2] = ACCEL_Z_SCALED( g_sensor_state.accel[2] );
   
-  /* Apply prop and int gain to rotation */
-  Omega_Vector[0] = Gyro_Vector[0] + Omega_I[0] + Omega_P[0];
-  Omega_Vector[1] = Gyro_Vector[1] + Omega_I[1] + Omega_P[1];
-  Omega_Vector[2] = Gyro_Vector[2] + Omega_I[2] + Omega_P[2];
+  /* Apply prop and int gain to rotation
+	** Need to convert the Gyro values to radians
+	**    Note: Values read from sensor are fixed point */
+  Omega_Vector[0] = GYRO_SCALED_RAD( g_sensor_state.gyro[0] ) + g_dcm_state.Omega_I[0] + g_dcm_state.Omega_P[0];
+  Omega_Vector[1] = GYRO_SCALED_RAD( g_sensor_state.gyro[1] ) + g_dcm_state.Omega_I[1] + g_dcm_state.Omega_P[1];
+  Omega_Vector[2] = GYRO_SCALED_RAD( g_sensor_state.gyro[2] ) + g_dcm_state.Omega_I[2] + g_dcm_state.Omega_P[2];
 
   /* Update the state matrix
   ** We are essentially applying a rotation */
-  DCM_Matrix[0][0] = G_Dt * (DCM_Matrix[0][1]*Omega_Vector[2] - DCM_Matrix[0][2]*Omega_Vector[1]) + DCM_Matrix[0][0];
-  DCM_Matrix[0][1] = G_Dt * (DCM_Matrix[0][2]*Omega_Vector[0] - DCM_Matrix[0][0]*Omega_Vector[2]) + DCM_Matrix[0][1];
-  DCM_Matrix[0][2] = G_Dt * (DCM_Matrix[0][0]*Omega_Vector[1] - DCM_Matrix[0][1]*Omega_Vector[0]) + DCM_Matrix[0][2];
-  DCM_Matrix[1][0] = G_Dt * (DCM_Matrix[1][1]*Omega_Vector[2] - DCM_Matrix[1][2]*Omega_Vector[1]) + DCM_Matrix[1][0];
-  DCM_Matrix[1][1] = G_Dt * (DCM_Matrix[1][2]*Omega_Vector[0] - DCM_Matrix[1][0]*Omega_Vector[2]) + DCM_Matrix[1][1];
-  DCM_Matrix[1][2] = G_Dt * (DCM_Matrix[1][0]*Omega_Vector[1] - DCM_Matrix[1][1]*Omega_Vector[0]) + DCM_Matrix[1][2];
-}
+  g_dcm_state.DCM_Matrix[0][0] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[0][1]*Omega_Vector[2] - g_dcm_state.DCM_Matrix[0][2]*Omega_Vector[1]) + g_dcm_state.DCM_Matrix[0][0];
+  g_dcm_state.DCM_Matrix[0][1] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[0][2]*Omega_Vector[0] - g_dcm_state.DCM_Matrix[0][0]*Omega_Vector[2]) + g_dcm_state.DCM_Matrix[0][1];
+  g_dcm_state.DCM_Matrix[0][2] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[0][0]*Omega_Vector[1] - g_dcm_state.DCM_Matrix[0][1]*Omega_Vector[0]) + g_dcm_state.DCM_Matrix[0][2];
+  g_dcm_state.DCM_Matrix[1][0] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[1][1]*Omega_Vector[2] - g_dcm_state.DCM_Matrix[1][2]*Omega_Vector[1]) + g_dcm_state.DCM_Matrix[1][0];
+  g_dcm_state.DCM_Matrix[1][1] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[1][2]*Omega_Vector[0] - g_dcm_state.DCM_Matrix[1][0]*Omega_Vector[2]) + g_dcm_state.DCM_Matrix[1][1];
+  g_dcm_state.DCM_Matrix[1][2] = g_control_state.G_Dt * (g_dcm_state.DCM_Matrix[1][0]*Omega_Vector[1] - g_dcm_state.DCM_Matrix[1][1]*Omega_Vector[0]) + g_dcm_state.DCM_Matrix[1][2];
 
+	
 
-/*************************************************
-** Normalize
-** We must normalize the DCM matrix
-** After each update in order to keep 
-** each vector in the DCM orthogonal
-*/
-void Normalize(void)
-{
-  float error=0;
-  float temporary[3][3];
-  float renorm=0;
-
+  /******************************************************************
+  ** DCM 2. Normalize DCM
+  ** We must normalize the DCM matrix
+  ** After each update in order to keep 
+  ** each vector in the DCM orthogonal
+  ******************************************************************/
+  
   /* Determine vector overlap
   ** Each vector should be orthogonal */
-  error = -Vector_Dot_Product(&DCM_Matrix[0][0],&DCM_Matrix[1][0]) * 0.5; 
+  error = -Vector_Dot_Product(&g_dcm_state.DCM_Matrix[0][0],&g_dcm_state.DCM_Matrix[1][0]) * 0.5; 
   
   /* temp = V .* e */
-  Vector_Scale(&temporary[0][0], &DCM_Matrix[1][0], error); 
-  Vector_Scale(&temporary[1][0], &DCM_Matrix[0][0], error); 
+  Vector_Scale( &g_dcm_state.DCM_Matrix[1][0], error, &TempM[0][0] ); 
+  Vector_Scale( &g_dcm_state.DCM_Matrix[0][0], error, &TempM[1][0] ); 
   
   /* temp = temp .* DCM[0][:] */
-  Vector_Add(&temporary[0][0], &temporary[0][0], &DCM_Matrix[0][0]);
-  Vector_Add(&temporary[1][0], &temporary[1][0], &DCM_Matrix[1][0]);
+  Vector_Add( &TempM[0][0], &g_dcm_state.DCM_Matrix[0][0], &TempM[0][0] );
+  Vector_Add( &TempM[1][0], &g_dcm_state.DCM_Matrix[1][0], &TempM[1][0] );
    
   /* Force orthogonality */
-  Vector_Cross_Product(&temporary[2][0],&temporary[0][0],&temporary[1][0]); 
+  Vector_Cross_Product( &TempM[0][0], &TempM[1][0], &TempM[2][0] ); 
   
   /* Normalize each vector
   ** DCM[i][:] = temp ./ ( 0.5*(3 - sum(temp.^2)) )
   ** Note that the sum of the DCM vectors should have length of 1 */
 	
-  renorm= .5 *(3 - Vector_Dot_Product(&temporary[0][0],&temporary[0][0]));
-  Vector_Scale(&DCM_Matrix[0][0], &temporary[0][0], renorm);
+  renorm = .5 *(3 - Vector_Dot_Product(&TempM[0][0],&TempM[0][0]));
+  Vector_Scale( &TempM[0][0], renorm, &g_dcm_state.DCM_Matrix[0][0] );
   
-  renorm= .5 *(3 - Vector_Dot_Product(&temporary[1][0],&temporary[1][0]));
-  Vector_Scale(&DCM_Matrix[1][0], &temporary[1][0], renorm);
+  renorm = .5 *(3 - Vector_Dot_Product(&TempM[1][0],&TempM[1][0]));
+  Vector_Scale( &TempM[1][0], renorm, &g_dcm_state.DCM_Matrix[1][0] );
   
-  renorm= .5 *(3 - Vector_Dot_Product(&temporary[2][0],&temporary[2][0])); 
-  Vector_Scale(&DCM_Matrix[2][0], &temporary[2][0], renorm);
-}
+  renorm = .5 *(3 - Vector_Dot_Product(&TempM[2][0],&TempM[2][0])); 
+  Vector_Scale( &TempM[2][0], renorm, &g_dcm_state.DCM_Matrix[2][0] );
 
 
-/*************************************************
-** Drift_Correction
-** Drift correction basically looks at the difference in 
-** the orientation described by the DCM matrix and the
-** orientation described by the current acceleration vector.
-** Essentially, the acceleration is the input and the DCM
-** matrix is the current state. 
-** NOTE: We are applying a drift correction by adjusting the
-**       proportional and integral feedback. So, this will not
-**       have an effect until the next iteration!
-*/
-void Drift_Correction(void)
-{
-  //Compensation the Roll, Pitch drift. 
-  static float Scaled_Omega_P[3];
-  static float Scaled_Omega_I[3];
-  
-  float Accel_magnitude;
-  float Accel_weight;
-  
-  float mag_heading_x;
-  float mag_heading_y;
-  float errorCourse;
-  
-  /* **** Roll and Pitch *************** */
-  /* Calculate the magnitude of the accelerometer vector */
-  Accel_magnitude = sqrt(Accel_Vector[0]*Accel_Vector[0] + Accel_Vector[1]*Accel_Vector[1] + Accel_Vector[2]*Accel_Vector[2]);
-  Accel_magnitude = Accel_magnitude / GRAVITY; // Scale to gravity.
-  
+
+  /******************************************************************
+  ** DCM 3. Drift_Correction
+  ** Drift correction basically looks at the difference in 
+  ** the orientation described by the DCM matrix and the
+  ** orientation described by the current acceleration vector.
+  ** Essentially, the acceleration is the input and the DCM
+  ** matrix is the current state. 
+  ** NOTE: We are applying a drift correction by adjusting the
+  **       proportional and integral feedback. So, this will not
+  **       have an effect until the next iteration!
+  ******************************************************************/
+
+  /* Roll and Pitch
+  ** Calculate the magnitude of the accelerometer vector 
+	** Scale to gravity */
+	Accel_magnitude = sqrt( Vector_Dot_Product( &Accel_Vector[0], &Accel_Vector[0] ) ) / GRAVITY;
+	
   /* Dynamic weighting of accelerometer info (reliability filter)
 	** Weight for accelerometer info (<0.5G = 0.0, 1G = 1.0 , >1.5G = 0.0) */
   Accel_weight = constrain(1 - 2*abs(1 - Accel_magnitude),0,1); 
@@ -229,11 +184,11 @@ void Drift_Correction(void)
   ** vector is naturally very noisy, but it is our input for each cycle 
   ** and serves as our state estimate. Therefore, we scale the error 
   ** by a integral and proportional gain in each cycle */
-  Vector_Cross_Product(&errorRollPitch[0],&Accel_Vector[0],&DCM_Matrix[2][0]); 
+  Vector_Cross_Product( &Accel_Vector[0], &g_dcm_state.DCM_Matrix[2][0], &errorRollPitch[0] ); 
 	
-  Vector_Scale(&Omega_P[0],&errorRollPitch[0],Kp_ROLLPITCH*Accel_weight);
-  Vector_Scale(&Scaled_Omega_I[0],&errorRollPitch[0],Ki_ROLLPITCH*Accel_weight);
-  Vector_Add(Omega_I,Omega_I,Scaled_Omega_I);     
+  Vector_Scale( &errorRollPitch[0], Kp_ROLLPITCH*Accel_weight, &g_dcm_state.Omega_P[0] );
+  Vector_Scale( &errorRollPitch[0], Ki_ROLLPITCH*Accel_weight, &ErrorGain[0] );
+  Vector_Add( g_dcm_state.Omega_I, ErrorGain, g_dcm_state.Omega_I );     
 
   /* Note:
   ** Roll and pitch have been lumped here, to simplify the math
@@ -243,32 +198,31 @@ void Drift_Correction(void)
   ** however, we would have to be clever about how we apply the
   ** acceleration vector */
 
-  /* ***** YAW *************** */
-  /* We make the gyro YAW drift correction based on compass magnetic heading 
+  /* YAW
+  ** We make the gyro YAW drift correction based on compass magnetic heading 
   ** The yaw is an estimate, and will drift towards some equilibrium as time 
   ** progresses. However, presuming the drift is not constant towards any 
   ** particular direction, this should be ok */
  
-  Vector_Scale( errorYaw, &DCM_Matrix[2][0], DCM_Matrix[0][0] ); /* Applys the yaw correction to the XYZ rotation of the aircraft, depeding the position. */
+  Vector_Scale( &g_dcm_state.DCM_Matrix[2][0], g_dcm_state.DCM_Matrix[0][0], errorYaw ); /* Applys the yaw correction to the XYZ rotation of the aircraft, depeding the position. */
   
   /* Update the proportional and integral gains per yaw error */
-  Vector_Scale(&Scaled_Omega_P[0],&errorYaw[0],Kp_YAW); /* 01proportional of YAW. */
-  Vector_Add(Omega_P,Omega_P,Scaled_Omega_P); /* Adding  Proportional. */
+  Vector_Scale( &errorYaw[0], Kp_YAW, &ErrorGain[0] ); /* proportional of YAW. */
+  Vector_Add( g_dcm_state.Omega_P, ErrorGain, g_dcm_state.Omega_P ); /* Adding  Proportional. */
   
-  Vector_Scale(&Scaled_Omega_I[0],&errorYaw[0],Ki_YAW); /* Adding Integrator */
-  Vector_Add(Omega_I,Omega_I,Scaled_Omega_I);//adding integrator to the Omega_I
-}
+  Vector_Scale( &errorYaw[0], Ki_YAW, &ErrorGain[0] ); /* Adding Integrator */
+  Vector_Add( g_dcm_state.Omega_I, ErrorGain, g_dcm_state.Omega_I ); /* Adding integrator to the Omega_I */
 
 
-/*************************************************
-** Euler_Angles
-** Calculate the euler angles from the orintation 
-** described by the DCM matrix.
-** DCM[2][:] is essentially a vector describing the
-** orientation of the IMU in space.\
-*/
-void Euler_Angles(void)
-{
+  
+  /******************************************************************
+  ** DCM 4. Extract Euler Angles from DCM
+  ** Calculate the euler angles from the orintation 
+  ** described by the DCM matrix.
+  ** DCM[2][:] is essentially a vector describing the
+  ** orientation of the IMU in space.
+  ******************************************************************/
+  
   /* Pitch Conventions (set in config):
   ** Range: -90:90
   ** With PITCH_ROT_CONV==1 : 
@@ -278,13 +232,13 @@ void Euler_Angles(void)
   switch ( PITCH_O )
   {
     case 1 :
-      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][0] );
+      g_sensor_state.pitch = -PITCH_ROT_CONV*f_asin( g_dcm_state.DCM_Matrix[2][0] );
       break;
     case 2 : 
-      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][1] );
+      g_sensor_state.pitch = -PITCH_ROT_CONV*f_asin( g_dcm_state.DCM_Matrix[2][1] );
       break;
     case 3 :
-      pitch = -PITCH_ROT_CONV*f_asin( DCM_Matrix[2][2] );
+      g_sensor_state.pitch = -PITCH_ROT_CONV*f_asin( g_dcm_state.DCM_Matrix[2][2] );
       break;
   }
   
@@ -302,26 +256,25 @@ void Euler_Angles(void)
   switch ( ROLL_O )
   {
     case 1 :
-      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][0], -ROLL_ZREF*DCM_Matrix[2][1] );
+      g_sensor_state.roll = -ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][0], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][1] );
       break;
     case 2 :
-      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][0], -ROLL_ZREF*DCM_Matrix[2][2] ); 
+      g_sensor_state.roll = -ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][0], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][2] ); 
       break;
     case 3 :
-      roll = -ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][1], -ROLL_ZREF*DCM_Matrix[2][2] );
+      g_sensor_state.roll = -ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][1], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][2] );
       break;
     case 4 :
-      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][1], -ROLL_ZREF*DCM_Matrix[2][0] );
+      g_sensor_state.roll =  ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][1], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][0] );
       break;
     case 5 :
-      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][2], -ROLL_ZREF*DCM_Matrix[2][0] );
+      g_sensor_state.roll =  ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][2], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][0] );
       break;
     case 6 :
-      roll =  ROLL_ROT_CONV*f_atan2( DCM_Matrix[2][2], -ROLL_ZREF*DCM_Matrix[2][1] );
+      g_sensor_state.roll =  ROLL_ROT_CONV*f_atan2( g_dcm_state.DCM_Matrix[2][2], -ROLL_ZREF*g_dcm_state.DCM_Matrix[2][1] );
       break;
   }
-  
-  yaw   =  f_atan2( DCM_Matrix[1][0], DCM_Matrix[0][0] ); // A faster atan2
+  g_sensor_state.yaw   =  f_atan2( g_dcm_state.DCM_Matrix[1][0], g_dcm_state.DCM_Matrix[0][0] ); // A faster atan2
 }
 
 
@@ -339,23 +292,23 @@ void Reset_Sensor_Fusion() {
 
   /* GET PITCH
   ** Using y-z-plane-component/x-component of gravity vector */
-  pitch = -f_atan2(accel[0], sqrt(accel[1] * accel[1] + accel[2] * accel[2]));
+  g_sensor_state.pitch = -f_atan2(g_sensor_state.accel[0], sqrt(g_sensor_state.accel[1] * g_sensor_state.accel[1] + g_sensor_state.accel[2] * g_sensor_state.accel[2]));
 
   /* GET ROLL
   ** Compensate pitch of gravity vector */
-  Vector_Cross_Product(temp1, accel, xAxis);
-  Vector_Cross_Product(temp2, xAxis, temp1);
+  Vector_Cross_Product( g_sensor_state.accel, xAxis, temp1);
+  Vector_Cross_Product( xAxis, temp1, temp2);
   
 	/* Normally using x-z-plane-component/y-component of compensated gravity vector
   ** roll = atan2(temp2[1], sqrt(temp2[0] * temp2[0] + temp2[2] * temp2[2]));
   ** Since we compensated for pitch, x-z-plane-component equals z-component: */
-  roll = f_atan2(temp2[1], temp2[2]);
+  g_sensor_state.roll = f_atan2(temp2[1], temp2[2]);
 
   /* GET YAW */
-  yaw = 0;
+  g_sensor_state.yaw = 0;
 
   /* Init rotation matrix */
-  Init_Rotation_Matrix(DCM_Matrix, yaw, pitch, roll);
+  Init_Rotation_Matrix(g_dcm_state.DCM_Matrix, g_sensor_state.yaw, g_sensor_state.pitch, g_sensor_state.roll);
 }
 
 
@@ -374,20 +327,20 @@ void Set_Sensor_Fusion()
 
   /* GET PITCH
   ** Using y-z-plane-component/x-component of gravity vector */
-  pitch = -f_atan2(accel[0], sqrt(accel[1] * accel[1] + accel[2] * accel[2]));
+  g_sensor_state.pitch = -f_atan2(g_sensor_state.accel[0], sqrt(g_sensor_state.accel[1] * g_sensor_state.accel[1] + g_sensor_state.accel[2] * g_sensor_state.accel[2]));
 
   /* GET ROLL
 	** Compensate pitch of gravity vector */
-  Vector_Cross_Product(temp1, accel, xAxis);
-  Vector_Cross_Product(temp2, xAxis, temp1);
+  Vector_Cross_Product( g_sensor_state.accel, xAxis, temp1 );
+  Vector_Cross_Product( xAxis, temp1, temp2 );
   
 	/* Normally using x-z-plane-component/y-component of compensated gravity vector
 	** roll = atan2(temp2[1], sqrt(temp2[0] * temp2[0] + temp2[2] * temp2[2]));
 	** Since we compensated for pitch, x-z-plane-component equals z-component: */
-  roll = f_atan2(temp2[1], temp2[2]);
+  g_sensor_state.roll = f_atan2(temp2[1], temp2[2]);
 
   /* GET YAW */
-  yaw = 0;
+  g_sensor_state.yaw = 0;
 }
 
 

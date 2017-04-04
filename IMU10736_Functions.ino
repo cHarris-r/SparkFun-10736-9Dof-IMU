@@ -100,7 +100,8 @@ void Accel_Init()
 	** Hz  */
   Wire.beginTransmission(ACCEL_ADDRESS);
   WIRE_SEND(ACCEL_RATE);
-  WIRE_SEND(0x0F);
+  //WIRE_SEND(0x0F);
+  WIRE_SEND(0x0E);
   Wire.endTransmission();
   delay(5);
 }
@@ -135,9 +136,9 @@ void Read_Accel()
   {
     /* No multiply by -1 for coordinate system transformation here, because of double negation:
     ** We want the gravity vector, which is negated acceleration vector. */
-    accel[0] = (int16_t)((((uint16_t) buff[3]) << 8) | buff[2]);  // X axis (internal sensor y axis)
-    accel[1] = (int16_t)((((uint16_t) buff[1]) << 8) | buff[0]);  // Y axis (internal sensor x axis)
-    accel[2] = (int16_t)((((uint16_t) buff[5]) << 8) | buff[4]);  // Z axis (internal sensor z axis)
+    g_sensor_state.accel[0] = (int16_t)((((uint16_t) buff[3]) << 8) | buff[2]);  // X axis (internal sensor y axis)
+    g_sensor_state.accel[1] = (int16_t)((((uint16_t) buff[1]) << 8) | buff[0]);  // Y axis (internal sensor x axis)
+    g_sensor_state.accel[2] = (int16_t)((((uint16_t) buff[5]) << 8) | buff[4]);  // Z axis (internal sensor z axis)
   }
   else
   {
@@ -201,9 +202,9 @@ void Read_Magn()
   {
     /* 9DOF Razor IMU SEN-10736 using HMC5883L magnetometer
     ** Data 2 byte width, MSB byte first then LSB; Y and Z reversed: X, Z, Y */
-    mag[0] = -1 * (int16_t)(((((uint16_t) buff[4]) << 8) | buff[5]));  // X axis (internal sensor -y axis)
-    mag[1] = -1 * (int16_t)(((((uint16_t) buff[0]) << 8) | buff[1]));  // Y axis (internal sensor -x axis)
-    mag[2] = -1 * (int16_t)(((((uint16_t) buff[2]) << 8) | buff[3]));  // Z axis (internal sensor -z axis)
+    g_sensor_state.mag[0] = -1 * (int16_t)(((((uint16_t) buff[4]) << 8) | buff[5]));  // X axis (internal sensor -y axis)
+    g_sensor_state.mag[1] = -1 * (int16_t)(((((uint16_t) buff[0]) << 8) | buff[1]));  // Y axis (internal sensor -x axis)
+    g_sensor_state.mag[2] = -1 * (int16_t)(((((uint16_t) buff[2]) << 8) | buff[3]));  // Z axis (internal sensor -z axis)
   }
   else
   {
@@ -219,7 +220,7 @@ void Gyro_Init()
 {
   /* Power up reset defaults */
   Wire.beginTransmission(GYRO_ADDRESS);
-  WIRE_SEND(0x3E);
+  WIRE_SEND(GYRO_POWER);
   WIRE_SEND(0x80);
   Wire.endTransmission();
   delay(5);
@@ -233,7 +234,8 @@ void Gyro_Init()
   ** FS_SEL: Full scale range, B3-B4, only accepts 11 */
   Wire.beginTransmission(GYRO_ADDRESS);
   WIRE_SEND(GYRO_DLPF);
-  WIRE_SEND(0x1B);  // DLPF_CFG = 3, FS_SEL = 3
+  //WIRE_SEND(0x1B);  // DLPF_CFG = 3:LPF 42Hz,Fi 1kHz , FS_SEL = 3:+-2000deg/sec
+  WIRE_SEND(0x03);  // DLPF_CFG = 3:LPF 42Hz,Fi 1kHz , FS_SEL = 3:+-2000deg/sec
   Wire.endTransmission();
   delay(5);
   
@@ -242,14 +244,16 @@ void Gyro_Init()
 	** 8 bit field (0-255) */
   Wire.beginTransmission(GYRO_ADDRESS);
   WIRE_SEND(GYRO_RATE);
-  WIRE_SEND(0x0A);  //  SMPLRT_DIV = 10 (50Hz w/ Fi=1Hz)
+  //WIRE_SEND(0x0A);  //  SMPLRT_DIV = 10 (90Hz w/ Fi=1kHz)
+  WIRE_SEND(0x00);  //  SMPLRT_DIV = 0 (1000Hz w/ Fi=1kHz)
   Wire.endTransmission();
   delay(5);
 
   /* Set clock to PLL with z gyro reference */
   Wire.beginTransmission(GYRO_ADDRESS);
   WIRE_SEND(GYRO_POWER);
-  WIRE_SEND(0x00);
+  //WIRE_SEND(0x00); /* Internal occilator */
+  WIRE_SEND(0x01); /* Gyro x ref */
   Wire.endTransmission();
   delay(5);
 }
@@ -282,9 +286,9 @@ void Read_Gyro()
 	/* Unpack Data */
   if (i == 6)
   {
-    gyro[0] = -1 * (int16_t)(((((uint16_t) buff[2]) << 8) | buff[3]));    // X axis (internal sensor -y axis)
-    gyro[1] = -1 * (int16_t)(((((uint16_t) buff[0]) << 8) | buff[1]));    // Y axis (internal sensor -x axis)
-    gyro[2] = -1 * (int16_t)(((((uint16_t) buff[4]) << 8) | buff[5]));    // Z axis (internal sensor -z axis)
+    g_sensor_state.gyro[0] = -1 * (int16_t)(((((uint16_t) buff[2]) << 8) | buff[3]));    // X axis (internal sensor -y axis)
+    g_sensor_state.gyro[1] = -1 * (int16_t)(((((uint16_t) buff[0]) << 8) | buff[1]));    // Y axis (internal sensor -x axis)
+    g_sensor_state.gyro[2] = -1 * (int16_t)(((((uint16_t) buff[4]) << 8) | buff[5]));    // Z axis (internal sensor -z axis)
   }
   else
   {

@@ -23,8 +23,8 @@
 *******************************************************************/
 
 /* DCM gain */
-#define Kp_ROLLPITCH 0.02f
-#define Ki_ROLLPITCH 0.00002f
+#define Kp_ROLLPITCH 0.1f //0.02f
+#define Ki_ROLLPITCH 0.00005f //0.00002f
 #define Kp_YAW 1.2f
 #define Ki_YAW 0.00002f
 
@@ -247,20 +247,6 @@
 
 
 
-/*******************************************************************
-** Tyedefs 
-********************************************************************/
-
-/* The RESPONSE_TYPE is used 
-** to store temporary resonse data
-** for responding to request from master */
-typedef struct{
-  uint16_t Packet_nBytes;  /* Length of entire packet, minus this variable, in bytes */
-  uint16_t PacketType;     /* Type code of packet */
-  uint16_t Buffer_nBytes;  /* Length of data buffer in bytes (0-50) */
-  unsigned char  Buffer[50];     /* Data buffer */
-  unsigned char  CheckSum;       /* CheckSum of data buffer only */
-} RESPONSE_TYPE;
 
 
 
